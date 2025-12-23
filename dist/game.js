@@ -1,11 +1,10 @@
 /**
  * =============================================
- * CYBER RUNNER - Hand Gesture Infinite Runner
- * Version: 1.2.0
+ * CYBER RUNNER - Performance Optimized
+ * Version: 2.1.0
  * =============================================
- * A cyberpunk-themed infinite runner game controlled
- * entirely by webcam hand gestures using MediaPipe.
- * Optimized for mobile devices with touch controls.
+ * Flat 2D infinite runner - NO parallax
+ * Maximum performance for mobile devices
  * =============================================
  */
 
@@ -13,163 +12,74 @@
 // MOBILE DEVICE DETECTION
 // ============================================
 const DeviceDetection = {
-    /**
-     * Detect if the device is mobile based on multiple signals
-     * NOT based on screen size - uses actual device characteristics
-     */
     isMobile: function () {
-        // Check user agent for mobile devices
-        const mobileUserAgentRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
-        const hasMobileUserAgent = mobileUserAgentRegex.test(navigator.userAgent);
-
-        // Check for touch points (most reliable for touch devices)
-        const hasTouchPoints = navigator.maxTouchPoints > 0;
-
-        // Check for touch events support
-        const hasTouchEvents = 'ontouchstart' in window;
-
-        // Check for mobile-specific APIs
-        const hasOrientationAPI = typeof window.orientation !== 'undefined';
-
-        // Check for coarse pointer (finger vs mouse)
-        const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
-
-        // Combine signals - require at least mobile UA or (touch + coarse pointer)
-        return hasMobileUserAgent || (hasTouchPoints && hasCoarsePointer) || hasOrientationAPI;
-    },
-
-    /**
-     * Check if device is iOS specifically
-     */
-    isIOS: function () {
-        return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    },
-
-    /**
-     * Check if device is Android specifically
-     */
-    isAndroid: function () {
-        return /Android/i.test(navigator.userAgent);
+        const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
+        return mobileUA.test(navigator.userAgent) ||
+            (navigator.maxTouchPoints > 0 && window.matchMedia('(pointer: coarse)').matches);
     }
 };
 
-// Global mobile state
 let IS_MOBILE = false;
-let touchIndicator = null;
 
 // ============================================
-// GAME CONFIGURATION
+// GAME CONFIGURATION (Simplified)
 // ============================================
 const CONFIG = {
-    // Game settings
-    INITIAL_SPEED: 5,
-    MAX_SPEED: 15,
-    SPEED_INCREMENT: 0.001,
-    GRAVITY: 0.8,
-    JUMP_FORCE: -18,
-
-    // Player settings
-    PLAYER_SIZE: 50,
-    PLAYER_X_POSITION: 100,
-
-    // Obstacle settings
-    OBSTACLE_MIN_WIDTH: 30,
-    OBSTACLE_MAX_WIDTH: 60,
-    OBSTACLE_MIN_HEIGHT: 40,
-    OBSTACLE_MAX_HEIGHT: 100,
-    OBSTACLE_GAP_MIN: 300,
-    OBSTACLE_GAP_MAX: 500,
-
-    // Gesture settings
-    FLICK_VELOCITY_THRESHOLD: 15,
-    FLICK_COOLDOWN: 300,
-    THUMBS_UP_HOLD_TIME: 1500,
-
-    // Visual settings
-    PARALLAX_DEPTH_SHIFT: 30,
-
+    INITIAL_SPEED: 6,
+    MAX_SPEED: 18,
+    SPEED_INCREMENT: 0.002,
+    GRAVITY: 1.0,
+    JUMP_FORCE: -16,
+    PLAYER_SIZE: 40,
+    PLAYER_X: 80,
+    OBSTACLE_WIDTH: 40,
+    OBSTACLE_HEIGHT_MIN: 40,
+    OBSTACLE_HEIGHT_MAX: 80,
+    GAP_MIN: 250,
+    GAP_MAX: 400,
+    GROUND_HEIGHT: 60,
     // Colors
-    COLORS: {
-        NEON_CYAN: '#00ffff',
-        NEON_MAGENTA: '#ff00ff',
-        NEON_YELLOW: '#ffff00',
-        DARK_BG: '#0a0a0f',
-        DARK_SECONDARY: '#1a1a2e',
-        GLOW_CYAN: 'rgba(0, 255, 255, 0.5)',
-        GLOW_MAGENTA: 'rgba(255, 0, 255, 0.5)'
-    }
+    BG: '#0a0a0f',
+    GROUND: '#1a1a2e',
+    GROUND_LINE: '#00ffff',
+    PLAYER: '#00ffff',
+    OBSTACLE: '#ff00ff',
+    TEXT: '#ffffff'
 };
 
 // ============================================
-// GAME STATE ENUM
+// GAME STATE
 // ============================================
-const GameState = {
-    LOADING: 'LOADING',
-    INTRO: 'INTRO',
-    PLAYING: 'PLAYING',
-    GAME_OVER: 'GAME_OVER'
-};
-
-// ============================================
-// GLOBAL VARIABLES
-// ============================================
-let canvas, ctx;
-let gameState = GameState.LOADING;
+const State = { LOADING: 0, INTRO: 1, PLAYING: 2, GAME_OVER: 3 };
+let gameState = State.LOADING;
 let score = 0;
 let highScores = [];
-let gameSpeed = CONFIG.INITIAL_SPEED;
+let speed = CONFIG.INITIAL_SPEED;
 
-// Player state
-let player = {
-    x: CONFIG.PLAYER_X_POSITION,
-    y: 0,
-    width: CONFIG.PLAYER_SIZE,
-    height: CONFIG.PLAYER_SIZE,
-    velocityY: 0,
-    isJumping: false,
-    rotation: 0,
-    groundY: 0
-};
+// Player
+let player = { y: 0, vy: 0, jumping: false, groundY: 0 };
 
-// Obstacles array
+// Obstacles
 let obstacles = [];
-let nextObstacleDistance = 0;
+let nextGap = CONFIG.GAP_MIN;
 
-// Parallax background layers
-let parallaxLayers = [];
-let jumpDepthOffset = 0;
+// Canvas
+let canvas, ctx;
 
-// Hand tracking state
-let handLandmarks = null;
-let previousIndexY = null;
-let lastFlickTime = 0;
-let thumbsUpStartTime = null;
-let thumbsUpProgress = 0;
-let handPosition = { x: 0, y: 0 };
+// Touch/Gesture
+let lastTap = 0;
+let touchStart = 0;
+let longPress = null;
+let flickY = null;
+let thumbsStart = null;
+let thumbsProgress = 0;
 
-// MediaPipe instances
+// MediaPipe
 let hands = null;
-let camera = null;
+let handData = null;
 
-// DOM elements
-let loadingScreen, loadingProgress, permissionRequest, webcamElement;
-
-// Mobile-specific settings
-const MOBILE_CONFIG = {
-    // Reduced visual effects for performance
-    REDUCED_GLOW: true,
-    SIMPLIFIED_HAND_SKELETON: true,
-    LOWER_CAMERA_RESOLUTION: true,
-    // Touch settings
-    DOUBLE_TAP_THRESHOLD: 300,
-    LONG_PRESS_DURATION: 800
-};
-
-// Touch state
-let lastTapTime = 0;
-let touchStartTime = 0;
-let longPressTimer = null;
+// Ground animation
+let groundOffset = 0;
 
 // ============================================
 // INITIALIZATION
@@ -177,1262 +87,498 @@ let longPressTimer = null;
 document.addEventListener('DOMContentLoaded', init);
 
 function init() {
-    // Detect mobile device FIRST
     IS_MOBILE = DeviceDetection.isMobile();
-    console.log('Device detected as:', IS_MOBILE ? 'MOBILE' : 'DESKTOP');
-
-    // Apply mobile class to body for CSS
     if (IS_MOBILE) {
         document.body.classList.add('mobile-device');
-
-        // Force landscape orientation on mobile
-        lockLandscapeOrientation();
-
-        // Listen for orientation changes
-        setupOrientationListener();
+        setupOrientation();
     }
 
-    // Get DOM elements
     canvas = document.getElementById('gameCanvas');
     ctx = canvas.getContext('2d');
-    loadingScreen = document.getElementById('loadingScreen');
-    loadingProgress = document.getElementById('loadingProgress');
-    permissionRequest = document.getElementById('permissionRequest');
-    webcamElement = document.getElementById('webcam');
-    touchIndicator = document.getElementById('touchIndicator');
 
-    // Set canvas size
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
+    resize();
+    window.addEventListener('resize', resize);
 
-    // Load high scores from localStorage
-    loadHighScores();
+    loadScores();
 
-    // Initialize touch controls for mobile
-    if (IS_MOBILE) {
-        initTouchControls();
-    }
+    if (IS_MOBILE) initTouch();
 
-    // Initialize MediaPipe
-    initMediaPipe();
+    initCamera();
 
-    // Start game loop
-    requestAnimationFrame(gameLoop);
+    loop();
 }
 
-function resizeCanvas() {
+function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-
-    // Update ground position
-    player.groundY = canvas.height - 100;
-    if (!player.isJumping) {
-        player.y = player.groundY - player.height;
-    }
-
-    // Reinitialize parallax layers
-    initParallaxLayers();
+    player.groundY = canvas.height - CONFIG.GROUND_HEIGHT;
+    if (!player.jumping) player.y = player.groundY - CONFIG.PLAYER_SIZE;
 }
 
 // ============================================
-// MEDIAPIPE INITIALIZATION
+// CAMERA & MEDIAPIPE (Simplified)
 // ============================================
-async function initMediaPipe() {
-    updateLoadingProgress(10);
+async function initCamera() {
+    updateLoading(20);
 
     try {
-        // Initialize MediaPipe Hands
         hands = new Hands({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`;
-            }
+            locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${f}`
         });
-
-        updateLoadingProgress(30);
 
         hands.setOptions({
             maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.5
+            modelComplexity: IS_MOBILE ? 0 : 1, // Simpler model on mobile
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.4
         });
 
-        hands.onResults(onHandResults);
+        hands.onResults(onHands);
+        updateLoading(50);
 
-        updateLoadingProgress(50);
-
-        // Request camera permission
-        await startCamera();
-
-    } catch (error) {
-        console.error('Error initializing MediaPipe:', error);
-        showPermissionRequest();
-    }
-}
-
-async function startCamera() {
-    try {
-        // Use lower resolution for mobile devices
-        const videoConfig = IS_MOBILE && MOBILE_CONFIG.LOWER_CAMERA_RESOLUTION
-            ? { width: 320, height: 240, facingMode: 'user' }
-            : { width: 640, height: 480, facingMode: 'user' };
+        const video = document.getElementById('webcam');
+        const res = IS_MOBILE ? { width: 320, height: 240 } : { width: 640, height: 480 };
 
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: videoConfig
+            video: { ...res, facingMode: 'user' }
         });
+        video.srcObject = stream;
 
-        webcamElement.srcObject = stream;
-
-        updateLoadingProgress(70);
-
-        // Initialize camera utility with appropriate resolution
-        camera = new Camera(webcamElement, {
-            onFrame: async () => {
-                if (hands) {
-                    await hands.send({ image: webcamElement });
-                }
-            },
-            width: videoConfig.width,
-            height: videoConfig.height
+        const cam = new Camera(video, {
+            onFrame: async () => { if (hands) await hands.send({ image: video }); },
+            ...res
         });
+        await cam.start();
 
-        await camera.start();
-
-        updateLoadingProgress(100);
-
-        // Hide loading screen after a brief delay
+        updateLoading(100);
         setTimeout(() => {
-            loadingScreen.classList.add('hidden');
-            gameState = GameState.INTRO;
+            document.getElementById('loadingScreen').classList.add('hidden');
+            gameState = State.INTRO;
+        }, 300);
 
-            // Show touch indicator on mobile
-            if (IS_MOBILE && touchIndicator) {
-                showTouchIndicator();
-            }
-        }, 500);
-
-    } catch (error) {
-        console.error('Camera error:', error);
-        showPermissionRequest();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('loadingScreen').classList.add('hidden');
+        document.getElementById('permissionRequest').classList.add('show');
     }
 }
 
-function showPermissionRequest() {
-    loadingScreen.classList.add('hidden');
-    permissionRequest.classList.add('show');
+function updateLoading(p) {
+    document.getElementById('loadingProgress').style.width = p + '%';
 }
 
-function updateLoadingProgress(percent) {
-    loadingProgress.style.width = percent + '%';
-}
+function onHands(r) {
+    if (r.multiHandLandmarks && r.multiHandLandmarks.length > 0) {
+        handData = r.multiHandLandmarks[0];
 
-// ============================================
-// HAND TRACKING RESULTS
-// ============================================
-function onHandResults(results) {
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        handLandmarks = results.multiHandLandmarks[0];
-
-        // Calculate hand center position for UI
-        const wrist = handLandmarks[0];
-        handPosition.x = (1 - wrist.x) * canvas.width; // Mirror horizontally
-        handPosition.y = wrist.y * canvas.height;
-
-        // Process gestures based on game state
-        if (gameState === GameState.INTRO || gameState === GameState.GAME_OVER) {
+        if (gameState === State.INTRO || gameState === State.GAME_OVER) {
             detectThumbsUp();
-        } else if (gameState === GameState.PLAYING) {
-            detectIndexFlick();
+        } else if (gameState === State.PLAYING) {
+            detectFlick();
         }
     } else {
-        handLandmarks = null;
-        thumbsUpStartTime = null;
-        thumbsUpProgress = 0;
-        previousIndexY = null;
+        handData = null;
+        thumbsStart = null;
+        thumbsProgress = 0;
+        flickY = null;
     }
 }
 
 // ============================================
-// GESTURE DETECTION
+// GESTURE DETECTION (Simplified)
 // ============================================
-
-/**
- * Detect thumbs up gesture with hold timer
- * Used for START and RESTART actions
- */
 function detectThumbsUp() {
-    if (!handLandmarks) return;
+    if (!handData) return;
 
-    const isThumbsUp = checkThumbsUpPose(handLandmarks);
+    const thumbUp = handData[4].y < handData[3].y && handData[4].y < handData[0].y;
+    const fingersCurled = handData[8].y > handData[6].y &&
+        handData[12].y > handData[10].y &&
+        handData[16].y > handData[14].y;
 
-    if (isThumbsUp) {
-        if (thumbsUpStartTime === null) {
-            thumbsUpStartTime = Date.now();
-        }
-
-        const elapsed = Date.now() - thumbsUpStartTime;
-        thumbsUpProgress = Math.min(elapsed / CONFIG.THUMBS_UP_HOLD_TIME, 1);
-
-        if (elapsed >= CONFIG.THUMBS_UP_HOLD_TIME) {
-            // Thumbs up held long enough - trigger action
-            if (gameState === GameState.INTRO) {
-                startGame();
-            } else if (gameState === GameState.GAME_OVER) {
-                restartGame();
-            }
-            thumbsUpStartTime = null;
-            thumbsUpProgress = 0;
+    if (thumbUp && fingersCurled) {
+        if (!thumbsStart) thumbsStart = Date.now();
+        thumbsProgress = Math.min((Date.now() - thumbsStart) / 1500, 1);
+        if (thumbsProgress >= 1) {
+            if (gameState === State.INTRO) startGame();
+            else if (gameState === State.GAME_OVER) startGame();
+            thumbsStart = null;
+            thumbsProgress = 0;
         }
     } else {
-        thumbsUpStartTime = null;
-        thumbsUpProgress = 0;
+        thumbsStart = null;
+        thumbsProgress = 0;
     }
 }
 
-/**
- * Check if hand is in thumbs up pose
- * Thumb extended up, other fingers curled
- */
-function checkThumbsUpPose(landmarks) {
-    // Landmark indices
-    const THUMB_TIP = 4;
-    const THUMB_IP = 3;
-    const THUMB_MCP = 2;
-    const INDEX_TIP = 8;
-    const INDEX_PIP = 6;
-    const MIDDLE_TIP = 12;
-    const MIDDLE_PIP = 10;
-    const RING_TIP = 16;
-    const RING_PIP = 14;
-    const PINKY_TIP = 20;
-    const PINKY_PIP = 18;
-    const WRIST = 0;
+function detectFlick() {
+    if (!handData) return;
 
-    // Check thumb is extended upward
-    const thumbUp = landmarks[THUMB_TIP].y < landmarks[THUMB_IP].y &&
-        landmarks[THUMB_TIP].y < landmarks[WRIST].y;
-
-    // Check other fingers are curled (tips below PIPs)
-    const indexCurled = landmarks[INDEX_TIP].y > landmarks[INDEX_PIP].y;
-    const middleCurled = landmarks[MIDDLE_TIP].y > landmarks[MIDDLE_PIP].y;
-    const ringCurled = landmarks[RING_TIP].y > landmarks[RING_PIP].y;
-    const pinkyCurled = landmarks[PINKY_TIP].y > landmarks[PINKY_PIP].y;
-
-    return thumbUp && indexCurled && middleCurled && ringCurled && pinkyCurled;
-}
-
-/**
- * Detect index finger flick gesture for jumping
- * Tracks vertical velocity of index fingertip
- */
-function detectIndexFlick() {
-    if (!handLandmarks) return;
-
-    const INDEX_TIP = 8;
-    const currentIndexY = handLandmarks[INDEX_TIP].y * canvas.height;
-
-    if (previousIndexY !== null) {
-        // Calculate vertical velocity (negative = moving up)
-        const velocityY = previousIndexY - currentIndexY;
-
-        const now = Date.now();
-        const cooldownPassed = now - lastFlickTime > CONFIG.FLICK_COOLDOWN;
-
-        // Check for upward flick
-        if (velocityY > CONFIG.FLICK_VELOCITY_THRESHOLD && cooldownPassed && !player.isJumping) {
-            jump();
-            lastFlickTime = now;
-        }
+    const y = handData[8].y * canvas.height;
+    if (flickY !== null) {
+        const vel = flickY - y;
+        if (vel > 12 && !player.jumping) jump();
     }
-
-    previousIndexY = currentIndexY;
+    flickY = y;
 }
 
 // ============================================
-// GAME ACTIONS
+// TOUCH CONTROLS
+// ============================================
+function initTouch() {
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        touchStart = Date.now();
+
+        if (gameState !== State.PLAYING) {
+            longPress = setTimeout(() => {
+                startGame();
+                vibrate(30);
+            }, 600);
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if (longPress) { clearTimeout(longPress); longPress = null; }
+
+        const dur = Date.now() - touchStart;
+        const now = Date.now();
+
+        if (gameState === State.PLAYING && dur < 300) {
+            jump();
+            vibrate(15);
+        }
+
+        if (gameState !== State.PLAYING && now - lastTap < 300) {
+            startGame();
+            vibrate(30);
+        }
+        lastTap = now;
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (longPress) { clearTimeout(longPress); longPress = null; }
+    }, { passive: false });
+}
+
+function vibrate(ms) { if (navigator.vibrate) navigator.vibrate(ms); }
+
+// ============================================
+// GAME LOGIC
 // ============================================
 function startGame() {
-    gameState = GameState.PLAYING;
+    gameState = State.PLAYING;
     score = 0;
-    gameSpeed = CONFIG.INITIAL_SPEED;
+    speed = CONFIG.INITIAL_SPEED;
     obstacles = [];
-    nextObstacleDistance = CONFIG.OBSTACLE_GAP_MIN;
-    player.y = player.groundY - player.height;
-    player.velocityY = 0;
-    player.isJumping = false;
-    player.rotation = 0;
-    jumpDepthOffset = 0;
-}
-
-function restartGame() {
-    startGame();
+    nextGap = CONFIG.GAP_MIN;
+    player.y = player.groundY - CONFIG.PLAYER_SIZE;
+    player.vy = 0;
+    player.jumping = false;
 }
 
 function jump() {
-    if (!player.isJumping) {
-        player.velocityY = CONFIG.JUMP_FORCE;
-        player.isJumping = true;
+    if (!player.jumping) {
+        player.vy = CONFIG.JUMP_FORCE;
+        player.jumping = true;
     }
 }
 
 function gameOver() {
-    gameState = GameState.GAME_OVER;
-    saveHighScore(Math.floor(score));
-    previousIndexY = null; // Reset flick detection
+    gameState = State.GAME_OVER;
+    saveScore(Math.floor(score));
+    flickY = null;
 }
 
 // ============================================
-// HIGH SCORE MANAGEMENT
+// HIGH SCORES
 // ============================================
-function loadHighScores() {
-    try {
-        const stored = localStorage.getItem('cyberRunnerHighScores');
-        highScores = stored ? JSON.parse(stored) : [];
-    } catch (e) {
-        highScores = [];
-    }
+function loadScores() {
+    try { highScores = JSON.parse(localStorage.getItem('cyberScores')) || []; }
+    catch { highScores = []; }
 }
 
-function saveHighScore(newScore) {
-    highScores.push(newScore);
+function saveScore(s) {
+    highScores.push(s);
     highScores.sort((a, b) => b - a);
-    highScores = highScores.slice(0, 5); // Keep top 5
-
-    try {
-        localStorage.setItem('cyberRunnerHighScores', JSON.stringify(highScores));
-    } catch (e) {
-        console.error('Failed to save high scores:', e);
-    }
-}
-
-function isNewHighScore(score) {
-    return highScores.length === 0 || score > highScores[0];
+    highScores = highScores.slice(0, 5);
+    try { localStorage.setItem('cyberScores', JSON.stringify(highScores)); } catch { }
 }
 
 // ============================================
-// PARALLAX BACKGROUND SYSTEM
-// ============================================
-function initParallaxLayers() {
-    parallaxLayers = [
-        // Layer 1: Distant city skyline (slowest)
-        {
-            speed: 0.2,
-            depthMultiplier: 0.3,
-            elements: generateSkylineElements(),
-            y: canvas.height * 0.3,
-            color: CONFIG.COLORS.DARK_SECONDARY
-        },
-        // Layer 2: Mid-ground geometric shapes
-        {
-            speed: 0.5,
-            depthMultiplier: 0.6,
-            elements: generateMidgroundElements(),
-            y: canvas.height * 0.5,
-            color: 'rgba(255, 0, 255, 0.3)'
-        },
-        // Layer 3: Foreground ground with grid
-        {
-            speed: 1.0,
-            depthMultiplier: 1.0,
-            gridOffset: 0,
-            y: canvas.height - 100,
-            color: CONFIG.COLORS.NEON_CYAN
-        }
-    ];
-}
-
-function generateSkylineElements() {
-    const elements = [];
-    let x = 0;
-    while (x < canvas.width * 2) {
-        const width = 30 + Math.random() * 60;
-        const height = 50 + Math.random() * 150;
-        elements.push({ x, width, height });
-        x += width + Math.random() * 20;
-    }
-    return elements;
-}
-
-function generateMidgroundElements() {
-    const elements = [];
-    for (let i = 0; i < 15; i++) {
-        elements.push({
-            x: Math.random() * canvas.width * 2,
-            size: 20 + Math.random() * 40,
-            type: Math.random() > 0.5 ? 'triangle' : 'diamond'
-        });
-    }
-    return elements;
-}
-
-// ============================================
-// OBSTACLE MANAGEMENT
-// ============================================
-function spawnObstacle() {
-    const width = CONFIG.OBSTACLE_MIN_WIDTH +
-        Math.random() * (CONFIG.OBSTACLE_MAX_WIDTH - CONFIG.OBSTACLE_MIN_WIDTH);
-    const height = CONFIG.OBSTACLE_MIN_HEIGHT +
-        Math.random() * (CONFIG.OBSTACLE_MAX_HEIGHT - CONFIG.OBSTACLE_MIN_HEIGHT);
-
-    obstacles.push({
-        x: canvas.width,
-        y: player.groundY - height,
-        width: width,
-        height: height,
-        glowPhase: Math.random() * Math.PI * 2
-    });
-
-    nextObstacleDistance = CONFIG.OBSTACLE_GAP_MIN +
-        Math.random() * (CONFIG.OBSTACLE_GAP_MAX - CONFIG.OBSTACLE_GAP_MIN);
-}
-
-function updateObstacles() {
-    // Move obstacles
-    for (let i = obstacles.length - 1; i >= 0; i--) {
-        obstacles[i].x -= gameSpeed;
-        obstacles[i].glowPhase += 0.1;
-
-        // Remove off-screen obstacles
-        if (obstacles[i].x + obstacles[i].width < 0) {
-            obstacles.splice(i, 1);
-        }
-    }
-
-    // Spawn new obstacles
-    nextObstacleDistance -= gameSpeed;
-    if (nextObstacleDistance <= 0) {
-        spawnObstacle();
-    }
-}
-
-// ============================================
-// COLLISION DETECTION
-// ============================================
-function checkCollision() {
-    const playerBox = {
-        x: player.x + 5,
-        y: player.y + 5,
-        width: player.width - 10,
-        height: player.height - 10
-    };
-
-    for (const obstacle of obstacles) {
-        if (playerBox.x < obstacle.x + obstacle.width &&
-            playerBox.x + playerBox.width > obstacle.x &&
-            playerBox.y < obstacle.y + obstacle.height &&
-            playerBox.y + playerBox.height > obstacle.y) {
-            return true;
-        }
-    }
-    return false;
-}
-
-// ============================================
-// UPDATE FUNCTIONS
+// UPDATE (Simplified physics)
 // ============================================
 function update() {
-    if (gameState !== GameState.PLAYING) return;
+    if (gameState !== State.PLAYING) return;
 
-    // Update score
-    score += gameSpeed * 0.1;
+    // Score & speed
+    score += speed * 0.1;
+    if (speed < CONFIG.MAX_SPEED) speed += CONFIG.SPEED_INCREMENT;
 
-    // Increase speed over time
-    if (gameSpeed < CONFIG.MAX_SPEED) {
-        gameSpeed += CONFIG.SPEED_INCREMENT;
+    // Player physics
+    player.vy += CONFIG.GRAVITY;
+    player.y += player.vy;
+
+    if (player.y >= player.groundY - CONFIG.PLAYER_SIZE) {
+        player.y = player.groundY - CONFIG.PLAYER_SIZE;
+        player.vy = 0;
+        player.jumping = false;
     }
 
-    // Update player physics
-    player.velocityY += CONFIG.GRAVITY;
-    player.y += player.velocityY;
+    // Ground animation
+    groundOffset = (groundOffset + speed) % 50;
 
-    // Ground collision
-    if (player.y >= player.groundY - player.height) {
-        player.y = player.groundY - player.height;
-        player.velocityY = 0;
-        player.isJumping = false;
-        player.rotation = 0;
+    // Obstacles
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        obstacles[i].x -= speed;
+        if (obstacles[i].x + CONFIG.OBSTACLE_WIDTH < 0) obstacles.splice(i, 1);
     }
 
-    // Update rotation during jump
-    if (player.isJumping) {
-        player.rotation += 0.15;
+    nextGap -= speed;
+    if (nextGap <= 0) {
+        const h = CONFIG.OBSTACLE_HEIGHT_MIN + Math.random() * (CONFIG.OBSTACLE_HEIGHT_MAX - CONFIG.OBSTACLE_HEIGHT_MIN);
+        obstacles.push({ x: canvas.width, y: player.groundY - h, h: h });
+        nextGap = CONFIG.GAP_MIN + Math.random() * (CONFIG.GAP_MAX - CONFIG.GAP_MIN);
     }
 
-    // Calculate jump depth offset for parallax
-    const jumpHeight = (player.groundY - player.height) - player.y;
-    jumpDepthOffset = (jumpHeight / (player.groundY - player.height)) * CONFIG.PARALLAX_DEPTH_SHIFT;
+    // Collision (simple box)
+    const px = CONFIG.PLAYER_X + 5;
+    const py = player.y + 5;
+    const ps = CONFIG.PLAYER_SIZE - 10;
 
-    // Update parallax layers
-    updateParallax();
-
-    // Update obstacles
-    updateObstacles();
-
-    // Check collision
-    if (checkCollision()) {
-        gameOver();
-    }
-}
-
-function updateParallax() {
-    // Update layer 1 (skyline)
-    for (const elem of parallaxLayers[0].elements) {
-        elem.x -= gameSpeed * parallaxLayers[0].speed;
-        if (elem.x + elem.width < 0) {
-            elem.x = canvas.width + Math.random() * 100;
-            elem.height = 50 + Math.random() * 150;
+    for (const o of obstacles) {
+        if (px < o.x + CONFIG.OBSTACLE_WIDTH && px + ps > o.x &&
+            py < o.y + o.h && py + ps > o.y) {
+            gameOver();
+            break;
         }
     }
-
-    // Update layer 2 (midground)
-    for (const elem of parallaxLayers[1].elements) {
-        elem.x -= gameSpeed * parallaxLayers[1].speed;
-        if (elem.x + elem.size < 0) {
-            elem.x = canvas.width + Math.random() * 200;
-        }
-    }
-
-    // Update layer 3 (ground grid)
-    parallaxLayers[2].gridOffset = (parallaxLayers[2].gridOffset + gameSpeed) % 50;
 }
 
 // ============================================
-// RENDER FUNCTIONS
+// RENDER (Flat 2D, no shadows/glow)
 // ============================================
 function render() {
-    // Clear canvas
-    ctx.fillStyle = CONFIG.COLORS.DARK_BG;
+    // Clear
+    ctx.fillStyle = CONFIG.BG;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw based on game state
-    switch (gameState) {
-        case GameState.LOADING:
-            // Loading screen is handled by HTML/CSS
-            break;
-        case GameState.INTRO:
-            drawParallax();
-            drawIntroScreen();
-            break;
-        case GameState.PLAYING:
-            drawParallax();
-            drawObstacles();
-            drawPlayer();
-            drawScore();
-            drawInstructions();
-            break;
-        case GameState.GAME_OVER:
-            drawParallax();
-            drawObstacles();
-            drawPlayer();
-            drawGameOverScreen();
-            break;
-    }
+    // Ground
+    ctx.fillStyle = CONFIG.GROUND;
+    ctx.fillRect(0, player.groundY, canvas.width, CONFIG.GROUND_HEIGHT);
 
-    // Always draw hand overlay when landmarks available (reduced on mobile)
-    if (handLandmarks && gameState !== GameState.LOADING) {
-        drawHandSkeleton();
+    // Ground line
+    ctx.strokeStyle = CONFIG.GROUND_LINE;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, player.groundY);
+    ctx.lineTo(canvas.width, player.groundY);
+    ctx.stroke();
 
-        // Draw thumbs up progress ring
-        if (thumbsUpProgress > 0) {
-            drawThumbsUpRing();
-        }
-    }
-
-    // Draw touch ripples on mobile
-    updateTouchRipples();
-}
-
-function drawParallax() {
-    // Layer 1: Distant skyline
-    const layer1 = parallaxLayers[0];
-    const layer1Offset = jumpDepthOffset * layer1.depthMultiplier;
-    ctx.fillStyle = layer1.color;
-    for (const elem of layer1.elements) {
-        ctx.fillRect(
-            elem.x,
-            layer1.y - elem.height + layer1Offset,
-            elem.width,
-            elem.height
-        );
-    }
-
-    // Layer 2: Midground shapes
-    const layer2 = parallaxLayers[1];
-    const layer2Offset = jumpDepthOffset * layer2.depthMultiplier;
-    ctx.fillStyle = layer2.color;
-    for (const elem of layer2.elements) {
-        ctx.save();
-        ctx.translate(elem.x, layer2.y + layer2Offset);
-
-        if (elem.type === 'triangle') {
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(elem.size / 2, -elem.size);
-            ctx.lineTo(elem.size, 0);
-            ctx.closePath();
-            ctx.fill();
-        } else {
-            ctx.beginPath();
-            ctx.moveTo(elem.size / 2, 0);
-            ctx.lineTo(elem.size, elem.size / 2);
-            ctx.lineTo(elem.size / 2, elem.size);
-            ctx.lineTo(0, elem.size / 2);
-            ctx.closePath();
-            ctx.fill();
-        }
-
-        ctx.restore();
-    }
-
-    // Layer 3: Ground with neon grid
-    const layer3 = parallaxLayers[2];
-    const layer3Offset = jumpDepthOffset * layer3.depthMultiplier;
-
-    // Ground platform
-    ctx.fillStyle = CONFIG.COLORS.DARK_SECONDARY;
-    ctx.fillRect(0, layer3.y + layer3Offset, canvas.width, canvas.height - layer3.y);
-
-    // Neon grid lines
-    ctx.strokeStyle = layer3.color;
+    // Simple grid on ground
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
     ctx.lineWidth = 1;
-    ctx.globalAlpha = 0.5;
-
-    // Vertical grid lines
-    for (let x = -layer3.gridOffset; x < canvas.width; x += 50) {
+    for (let x = -groundOffset; x < canvas.width; x += 50) {
         ctx.beginPath();
-        ctx.moveTo(x, layer3.y + layer3Offset);
+        ctx.moveTo(x, player.groundY);
         ctx.lineTo(x, canvas.height);
         ctx.stroke();
     }
 
-    // Horizontal grid lines
-    for (let y = layer3.y + layer3Offset; y < canvas.height; y += 30) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
+    if (gameState === State.INTRO) {
+        drawIntro();
+    } else if (gameState === State.PLAYING) {
+        drawGame();
+    } else if (gameState === State.GAME_OVER) {
+        drawGame();
+        drawGameOver();
     }
 
-    ctx.globalAlpha = 1;
+    // Camera preview in bottom-right corner (instead of hand skeleton)
+    drawCameraPreview();
 
-    // Ground line with glow
-    ctx.strokeStyle = CONFIG.COLORS.NEON_CYAN;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowBlur = 15;
-    ctx.beginPath();
-    ctx.moveTo(0, layer3.y + layer3Offset);
-    ctx.lineTo(canvas.width, layer3.y + layer3Offset);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-}
-
-function drawPlayer() {
-    ctx.save();
-
-    // Translate to player center for rotation
-    const centerX = player.x + player.width / 2;
-    const centerY = player.y + player.height / 2;
-    ctx.translate(centerX, centerY);
-    ctx.rotate(player.rotation);
-
-    // Draw glow
-    ctx.shadowColor = CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowBlur = 20;
-
-    // Draw cube outline
-    ctx.strokeStyle = CONFIG.COLORS.NEON_CYAN;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(-player.width / 2, -player.height / 2, player.width, player.height);
-
-    // Draw inner fill
-    ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
-    ctx.fillRect(-player.width / 2, -player.height / 2, player.width, player.height);
-
-    // Draw diagonal lines for cube effect
-    ctx.beginPath();
-    ctx.moveTo(-player.width / 2, -player.height / 2);
-    ctx.lineTo(player.width / 2, player.height / 2);
-    ctx.moveTo(player.width / 2, -player.height / 2);
-    ctx.lineTo(-player.width / 2, player.height / 2);
-    ctx.stroke();
-
-    ctx.shadowBlur = 0;
-    ctx.restore();
-}
-
-function drawObstacles() {
-    for (const obstacle of obstacles) {
-        const glowIntensity = 0.5 + Math.sin(obstacle.glowPhase) * 0.3;
-
-        ctx.save();
-        ctx.shadowColor = CONFIG.COLORS.NEON_MAGENTA;
-        ctx.shadowBlur = 15 * glowIntensity;
-
-        // Obstacle outline
-        ctx.strokeStyle = CONFIG.COLORS.NEON_MAGENTA;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-
-        // Obstacle fill
-        ctx.fillStyle = `rgba(255, 0, 255, ${0.2 * glowIntensity})`;
-        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-
-        ctx.shadowBlur = 0;
-        ctx.restore();
+    // Thumbs up ring
+    if (thumbsProgress > 0) {
+        drawThumbsRing();
     }
 }
 
-function drawHandSkeleton() {
-    if (!handLandmarks) return;
+function drawGame() {
+    // Player (simple square)
+    ctx.fillStyle = CONFIG.PLAYER;
+    ctx.fillRect(CONFIG.PLAYER_X, player.y, CONFIG.PLAYER_SIZE, CONFIG.PLAYER_SIZE);
 
-    // Hand connections for skeleton
-    const connections = [
-        [0, 1], [1, 2], [2, 3], [3, 4],     // Thumb
-        [0, 5], [5, 6], [6, 7], [7, 8],     // Index
-        [0, 9], [9, 10], [10, 11], [11, 12], // Middle
-        [0, 13], [13, 14], [14, 15], [15, 16], // Ring
-        [0, 17], [17, 18], [18, 19], [19, 20], // Pinky
-        [5, 9], [9, 13], [13, 17]             // Palm
-    ];
-
-    ctx.save();
-
-    // Create gradient for connections
-    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, CONFIG.COLORS.NEON_CYAN);
-    gradient.addColorStop(1, CONFIG.COLORS.NEON_MAGENTA);
-
-    // Draw connections
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowBlur = 10;
-
-    for (const [i, j] of connections) {
-        const from = handLandmarks[i];
-        const to = handLandmarks[j];
-
-        ctx.beginPath();
-        ctx.moveTo((1 - from.x) * canvas.width, from.y * canvas.height);
-        ctx.lineTo((1 - to.x) * canvas.width, to.y * canvas.height);
-        ctx.stroke();
+    // Obstacles (simple rectangles)
+    ctx.fillStyle = CONFIG.OBSTACLE;
+    for (const o of obstacles) {
+        ctx.fillRect(o.x, o.y, CONFIG.OBSTACLE_WIDTH, o.h);
     }
 
-    // Draw joints
-    ctx.fillStyle = CONFIG.COLORS.NEON_MAGENTA;
-    ctx.shadowColor = CONFIG.COLORS.NEON_MAGENTA;
-
-    for (const landmark of handLandmarks) {
-        const x = (1 - landmark.x) * canvas.width;
-        const y = landmark.y * canvas.height;
-
-        ctx.beginPath();
-        ctx.arc(x, y, 5, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    ctx.restore();
-}
-
-function drawThumbsUpRing() {
-    const centerX = handPosition.x;
-    const centerY = handPosition.y;
-    const radius = 60;
-
-    ctx.save();
-
-    // Background ring
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Progress ring
-    ctx.strokeStyle = CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowColor = CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowBlur = 15;
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * thumbsUpProgress));
-    ctx.stroke();
-
-    // Thumbs up icon
-    ctx.font = '24px Arial';
-    ctx.fillStyle = CONFIG.COLORS.NEON_CYAN;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('👍', centerX, centerY);
-
-    ctx.restore();
-}
-
-function drawScore() {
-    ctx.save();
-
-    ctx.font = 'bold 28px Orbitron, sans-serif';
-    ctx.fillStyle = CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowColor = CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowBlur = 10;
+    // Score
+    ctx.fillStyle = CONFIG.TEXT;
+    ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'right';
+    ctx.fillText('SCORE: ' + Math.floor(score), canvas.width - 20, 40);
 
-    ctx.fillText(`SCORE: ${Math.floor(score)}`, canvas.width - 30, 50);
-
-    ctx.restore();
-}
-
-function drawInstructions() {
-    ctx.save();
-
-    ctx.font = '14px Orbitron, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    // Instructions
     ctx.textAlign = 'left';
-
-    // Show different instructions based on device type
-    if (IS_MOBILE) {
-        ctx.fillText('👆 TAP anywhere to jump', 30, 40);
-    } else {
-        ctx.fillText('☝ Flick index finger UP to jump', 30, 40);
-    }
-
-    ctx.restore();
+    ctx.font = '12px Arial';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText(IS_MOBILE ? 'TAP to jump' : 'Flick finger UP to jump', 20, 30);
 }
 
-function drawIntroScreen() {
-    ctx.save();
-
-    // Semi-transparent overlay
-    ctx.fillStyle = 'rgba(10, 10, 15, 0.7)';
+function drawIntro() {
+    ctx.fillStyle = 'rgba(10, 10, 15, 0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
 
-    // Title with glow
-    ctx.font = 'bold 64px Orbitron, sans-serif';
-    ctx.fillStyle = CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowColor = CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowBlur = 30;
+    ctx.fillStyle = CONFIG.GROUND_LINE;
+    ctx.font = 'bold 48px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('CYBER RUNNER', centerX, centerY - 80);
+    ctx.fillText('CYBER RUNNER', cx, cy - 60);
 
-    // Subtitle
-    ctx.font = '24px Orbitron, sans-serif';
-    ctx.shadowBlur = 15;
-    ctx.fillStyle = CONFIG.COLORS.NEON_MAGENTA;
-    ctx.shadowColor = CONFIG.COLORS.NEON_MAGENTA;
-    ctx.fillText('HAND GESTURE CONTROL', centerX, centerY - 30);
+    ctx.fillStyle = CONFIG.OBSTACLE;
+    ctx.font = '18px Arial';
+    ctx.fillText('GESTURE CONTROL', cx, cy - 20);
 
-    // High score display
     if (highScores.length > 0) {
-        ctx.font = '20px Orbitron, sans-serif';
-        ctx.fillStyle = CONFIG.COLORS.NEON_YELLOW;
-        ctx.shadowColor = CONFIG.COLORS.NEON_YELLOW;
-        ctx.shadowBlur = 10;
-        ctx.fillText(`HIGH SCORE: ${highScores[0]}`, centerX, centerY + 30);
+        ctx.fillStyle = '#ffff00';
+        ctx.font = '16px Arial';
+        ctx.fillText('HIGH SCORE: ' + highScores[0], cx, cy + 20);
     }
 
-    // Start instruction - different for mobile vs desktop
-    ctx.font = '18px Orbitron, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.shadowBlur = 0;
-
-    if (IS_MOBILE) {
-        ctx.fillText('Double-tap or hold to Start', centerX, centerY + 100);
-        ctx.font = '14px Orbitron, sans-serif';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.fillText('Hand gestures also work!', centerX, centerY + 140);
-    } else {
-        ctx.fillText('Hold 👍 to Start', centerX, centerY + 100);
-        ctx.font = '14px Orbitron, sans-serif';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.fillText('Show your hand to the camera', centerX, centerY + 140);
-    }
-
-    ctx.restore();
+    ctx.fillStyle = CONFIG.TEXT;
+    ctx.font = '16px Arial';
+    ctx.fillText(IS_MOBILE ? 'Double-tap or hold to Start' : 'Hold 👍 to Start', cx, cy + 70);
 }
 
-function drawGameOverScreen() {
-    ctx.save();
-
-    // Semi-transparent overlay
+function drawGameOver() {
     ctx.fillStyle = 'rgba(10, 10, 15, 0.85)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
-    const currentScore = Math.floor(score);
-    const isNewHigh = isNewHighScore(currentScore);
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
 
-    // Game Over title
-    ctx.font = 'bold 56px Orbitron, sans-serif';
-    ctx.fillStyle = CONFIG.COLORS.NEON_MAGENTA;
-    ctx.shadowColor = CONFIG.COLORS.NEON_MAGENTA;
-    ctx.shadowBlur = 30;
+    ctx.fillStyle = CONFIG.OBSTACLE;
+    ctx.font = 'bold 42px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('GAME OVER', centerX, centerY - 120);
+    ctx.fillText('GAME OVER', cx, cy - 80);
 
-    // Current score
-    ctx.font = 'bold 36px Orbitron, sans-serif';
-    ctx.fillStyle = isNewHigh ? CONFIG.COLORS.NEON_YELLOW : CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowColor = ctx.fillStyle;
-    ctx.shadowBlur = 20;
-    ctx.fillText(`SCORE: ${currentScore}`, centerX, centerY - 50);
+    ctx.fillStyle = CONFIG.GROUND_LINE;
+    ctx.font = 'bold 28px Arial';
+    ctx.fillText('SCORE: ' + Math.floor(score), cx, cy - 30);
 
-    // New high score badge
-    if (isNewHigh) {
-        ctx.font = '18px Orbitron, sans-serif';
-        ctx.fillStyle = CONFIG.COLORS.NEON_YELLOW;
-        ctx.fillText('★ NEW HIGH SCORE! ★', centerX, centerY - 15);
-    }
-
-    // Top 5 high scores
-    ctx.font = 'bold 20px Orbitron, sans-serif';
-    ctx.fillStyle = CONFIG.COLORS.NEON_CYAN;
-    ctx.shadowBlur = 10;
-    ctx.fillText('TOP 5 SCORES', centerX, centerY + 30);
-
-    ctx.font = '16px Orbitron, sans-serif';
-    ctx.shadowBlur = 5;
+    // Top 5
+    ctx.font = '14px Arial';
+    ctx.fillStyle = CONFIG.TEXT;
+    ctx.fillText('TOP SCORES', cx, cy + 10);
 
     for (let i = 0; i < 5; i++) {
-        const scoreValue = highScores[i] || '---';
-        const yPos = centerY + 60 + (i * 25);
-        const isCurrentScore = highScores[i] === currentScore;
-
-        if (isCurrentScore && i === highScores.indexOf(currentScore)) {
-            ctx.fillStyle = CONFIG.COLORS.NEON_YELLOW;
-            ctx.shadowColor = CONFIG.COLORS.NEON_YELLOW;
-        } else {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.shadowColor = 'transparent';
-        }
-
-        ctx.fillText(`${i + 1}. ${scoreValue}`, centerX, yPos);
+        const s = highScores[i] || '---';
+        ctx.fillStyle = (highScores[i] === Math.floor(score) && i === highScores.indexOf(Math.floor(score)))
+            ? '#ffff00' : 'rgba(255,255,255,0.6)';
+        ctx.fillText((i + 1) + '. ' + s, cx, cy + 35 + i * 20);
     }
 
-    // Restart instruction - different for mobile vs desktop
-    ctx.font = '18px Orbitron, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = CONFIG.TEXT;
+    ctx.font = '14px Arial';
+    ctx.fillText(IS_MOBILE ? 'Double-tap or hold to Restart' : 'Hold 👍 to Restart', cx, cy + 150);
+}
 
-    if (IS_MOBILE) {
-        ctx.fillText('Double-tap or hold to Restart', centerX, centerY + 200);
-    } else {
-        ctx.fillText('Hold 👍 to Restart', centerX, centerY + 200);
-    }
+function drawCameraPreview() {
+    const video = document.getElementById('webcam');
+    if (!video || !video.srcObject) return;
 
+    // Preview size
+    const previewWidth = IS_MOBILE ? 100 : 150;
+    const previewHeight = IS_MOBILE ? 75 : 112;
+    const margin = 15;
+    const borderWidth = 2;
+
+    // Position: bottom-right corner
+    const x = canvas.width - previewWidth - margin;
+    const y = canvas.height - previewHeight - margin;
+
+    // Draw border
+    ctx.strokeStyle = CONFIG.GROUND_LINE;
+    ctx.lineWidth = borderWidth;
+    ctx.strokeRect(x - borderWidth, y - borderWidth, previewWidth + borderWidth * 2, previewHeight + borderWidth * 2);
+
+    // Draw video (mirrored horizontally)
+    ctx.save();
+    ctx.translate(x + previewWidth, y);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, previewWidth, previewHeight);
     ctx.restore();
+}
+
+function drawThumbsRing() {
+    if (!handData) return;
+    const x = (1 - handData[0].x) * canvas.width;
+    const y = handData[0].y * canvas.height;
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(x, y, 50, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = CONFIG.GROUND_LINE;
+    ctx.beginPath();
+    ctx.arc(x, y, 50, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * thumbsProgress);
+    ctx.stroke();
 }
 
 // ============================================
 // GAME LOOP
 // ============================================
-function gameLoop() {
+function loop() {
     update();
     render();
-    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(loop);
 }
 
 // ============================================
-// KEYBOARD FALLBACK (for testing)
+// KEYBOARD FALLBACK
 // ============================================
 document.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
-        if (gameState === GameState.PLAYING) {
-            jump();
-        } else if (gameState === GameState.INTRO) {
-            startGame();
-        } else if (gameState === GameState.GAME_OVER) {
-            restartGame();
-        }
+        e.preventDefault();
+        if (gameState === State.PLAYING) jump();
+        else startGame();
     }
 });
 
 // ============================================
-// MOBILE TOUCH CONTROLS
+// ORIENTATION LOCK
 // ============================================
+function setupOrientation() {
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
 
-/**
- * Initialize touch event listeners for mobile devices
- */
-function initTouchControls() {
-    console.log('Initializing touch controls for mobile');
-
-    // Prevent default touch behaviors
-    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
-    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-
-    // Prevent context menu on long press
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('click', tryFullscreen, { once: true });
+    document.addEventListener('touchstart', tryFullscreen, { once: true });
 }
 
-/**
- * Handle touch start event
- */
-function handleTouchStart(e) {
-    e.preventDefault();
+function checkOrientation() {
+    const prompt = document.getElementById('orientationPrompt');
+    if (!prompt || !IS_MOBILE) return;
 
-    touchStartTime = Date.now();
-    const now = Date.now();
-
-    // Start long press timer for START/RESTART
-    if (gameState === GameState.INTRO || gameState === GameState.GAME_OVER) {
-        longPressTimer = setTimeout(() => {
-            if (gameState === GameState.INTRO) {
-                startGame();
-                vibrate(50); // Haptic feedback
-            } else if (gameState === GameState.GAME_OVER) {
-                restartGame();
-                vibrate(50);
-            }
-        }, MOBILE_CONFIG.LONG_PRESS_DURATION);
-    }
+    const portrait = window.innerHeight > window.innerWidth;
+    prompt.style.display = portrait ? 'flex' : 'none';
 }
 
-/**
- * Handle touch end event
- */
-function handleTouchEnd(e) {
-    e.preventDefault();
-
-    // Clear long press timer
-    if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-    }
-
-    const touchDuration = Date.now() - touchStartTime;
-    const now = Date.now();
-
-    // Regular tap during gameplay = JUMP
-    if (gameState === GameState.PLAYING && touchDuration < 300) {
-        jump();
-        vibrate(20); // Light haptic feedback
-        showTouchFeedback(e.changedTouches[0]);
-    }
-
-    // Double tap detection for quick START/RESTART
-    if (gameState === GameState.INTRO || gameState === GameState.GAME_OVER) {
-        if (now - lastTapTime < MOBILE_CONFIG.DOUBLE_TAP_THRESHOLD) {
-            if (gameState === GameState.INTRO) {
-                startGame();
-            } else {
-                restartGame();
-            }
-            vibrate(50);
-        }
-        lastTapTime = now;
-    }
-}
-
-/**
- * Handle touch move event
- */
-function handleTouchMove(e) {
-    e.preventDefault();
-    // Cancel long press if finger moves
-    if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-    }
-}
-
-/**
- * Vibration feedback for mobile
- */
-function vibrate(duration) {
-    if ('vibrate' in navigator) {
-        navigator.vibrate(duration);
-    }
-}
-
-/**
- * Show visual feedback on touch location
- */
-function showTouchFeedback(touch) {
-    const x = touch.clientX;
-    const y = touch.clientY;
-
-    // Draw a ripple effect at touch location
-    const ripple = { x, y, radius: 0, alpha: 1 };
-    touchRipples.push(ripple);
-}
-
-// Touch ripple effects array
-let touchRipples = [];
-
-/**
- * Show/hide touch indicator
- */
-function showTouchIndicator() {
-    if (touchIndicator) {
-        touchIndicator.classList.add('visible');
-        // Hide after 3 seconds
-        setTimeout(() => {
-            touchIndicator.classList.remove('visible');
-        }, 3000);
-    }
-}
-
-/**
- * Update and draw touch ripples
- */
-function updateTouchRipples() {
+async function tryFullscreen() {
     if (!IS_MOBILE) return;
-
-    for (let i = touchRipples.length - 1; i >= 0; i--) {
-        const ripple = touchRipples[i];
-        ripple.radius += 8;
-        ripple.alpha -= 0.05;
-
-        if (ripple.alpha <= 0) {
-            touchRipples.splice(i, 1);
-        } else {
-            ctx.save();
-            ctx.strokeStyle = `rgba(0, 255, 255, ${ripple.alpha})`;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.restore();
-        }
-    }
-}
-
-// ============================================
-// ORIENTATION LOCK (MOBILE)
-// ============================================
-
-/**
- * Lock screen to landscape orientation using Screen Orientation API
- * This requires user interaction first (fullscreen) on most browsers
- */
-function lockLandscapeOrientation() {
-    // Try to lock orientation using Screen Orientation API
-    if (screen.orientation && screen.orientation.lock) {
-        // Request fullscreen first (required for orientation lock on most browsers)
-        console.log('Screen Orientation API available, will lock on first interaction');
-    } else {
-        console.log('Screen Orientation API not supported, using visual prompt');
-    }
-    // Always check and show prompt initially
-    checkOrientationAndShowPrompt();
-}
-
-/**
- * Request fullscreen and then lock orientation
- */
-async function requestFullscreenAndLock() {
     try {
-        // Check if we can request fullscreen
-        const docEl = document.documentElement;
-
-        if (docEl.requestFullscreen) {
-            await docEl.requestFullscreen();
-        } else if (docEl.webkitRequestFullscreen) {
-            await docEl.webkitRequestFullscreen();
-        } else if (docEl.msRequestFullscreen) {
-            await docEl.msRequestFullscreen();
-        }
-
-        // Now try to lock orientation
+        const el = document.documentElement;
+        if (el.requestFullscreen) await el.requestFullscreen();
         if (screen.orientation && screen.orientation.lock) {
-            try {
-                await screen.orientation.lock('landscape');
-                console.log('Orientation locked to landscape');
-            } catch (lockError) {
-                console.log('Could not lock orientation:', lockError.message);
-            }
+            await screen.orientation.lock('landscape');
         }
-
-    } catch (fullscreenError) {
-        console.log('Could not enter fullscreen:', fullscreenError.message);
-    }
+    } catch { }
 }
-
-/**
- * Setup orientation change listener
- */
-function setupOrientationListener() {
-    // Modern API
-    if (screen.orientation) {
-        screen.orientation.addEventListener('change', checkOrientationAndShowPrompt);
-    }
-
-    // Legacy API
-    window.addEventListener('orientationchange', checkOrientationAndShowPrompt);
-
-    // Also check on resize (some devices don't fire orientation events)
-    window.addEventListener('resize', debounce(checkOrientationAndShowPrompt, 200));
-
-    // Initial check
-    checkOrientationAndShowPrompt();
-}
-
-/**
- * Check current orientation and show/hide prompt
- */
-function checkOrientationAndShowPrompt() {
-    const orientationPrompt = document.getElementById('orientationPrompt');
-    if (!orientationPrompt) return;
-
-    const isPortrait = isDeviceInPortrait();
-
-    if (isPortrait && IS_MOBILE) {
-        orientationPrompt.style.display = 'flex';
-    } else {
-        orientationPrompt.style.display = 'none';
-    }
-}
-
-/**
- * Detect if device is in portrait orientation
- */
-function isDeviceInPortrait() {
-    // Method 1: Screen Orientation API
-    if (screen.orientation && screen.orientation.type) {
-        return screen.orientation.type.includes('portrait');
-    }
-
-    // Method 2: window.orientation (deprecated but widely supported)
-    if (typeof window.orientation !== 'undefined') {
-        return window.orientation === 0 || window.orientation === 180;
-    }
-
-    // Method 3: Compare dimensions
-    return window.innerHeight > window.innerWidth;
-}
-
-/**
- * Simple debounce function
- */
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-/**
- * Try to enter fullscreen and lock orientation on first user interaction
- */
-document.addEventListener('click', function onFirstInteraction() {
-    if (IS_MOBILE) {
-        requestFullscreenAndLock();
-    }
-}, { once: true });
-
-document.addEventListener('touchstart', function onFirstTouch() {
-    if (IS_MOBILE) {
-        requestFullscreenAndLock();
-    }
-}, { once: true });

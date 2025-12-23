@@ -5,17 +5,15 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="description" content="Hand Gesture Infinite Runner - A cyberpunk game controlled by your hands">
+    <meta name="description" content="CYBER RUNNER - Fast 2D infinite runner with hand gestures">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0a0a0f">
-    <title>CYBER RUNNER | Hand Gesture Game</title>
+    <title>CYBER RUNNER</title>
 
-    <!-- Styles with version for cache busting -->
-    <link rel="stylesheet" href="styles.css?v=1.2.0">
+    <link rel="stylesheet" href="styles.css?v=2.1.0">
 
-    <!-- MediaPipe Hands CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.min.js"></script>
 </head>
@@ -26,38 +24,27 @@
         <video id="webcam" autoplay playsinline></video>
     </div>
 
-    <!-- Loading Screen -->
     <div id="loadingScreen">
-        <div class="loading-text">INITIALIZING</div>
+        <div class="loading-text">LOADING</div>
         <div class="loading-bar">
             <div class="loading-progress" id="loadingProgress"></div>
         </div>
     </div>
 
-    <!-- Camera Permission Request -->
     <div id="permissionRequest">
         <div class="permission-icon">📷</div>
         <div class="permission-text">Camera Access Required</div>
-        <div class="permission-subtext">
-            This game uses your webcam to detect hand gestures.
-            Please allow camera access to play.
-        </div>
+        <div class="permission-subtext">Allow camera to use hand gestures</div>
     </div>
 
-    <!-- Scanline Effect -->
-    <div id="scanlines"></div>
-
-    <!-- Mobile Touch Indicator -->
     <div id="touchIndicator">TAP TO JUMP</div>
 
-    <!-- Mobile Orientation Prompt -->
     <div id="orientationPrompt">
         <div class="rotate-icon">📱</div>
-        <div class="rotate-text">Please rotate your device to landscape</div>
+        <div class="rotate-text">Rotate to landscape</div>
     </div>
 
-    <!-- Game Script with version for cache busting -->
-    <script src="game.js?v=1.2.0"></script>
+    <script src="game.js?v=2.1.0"></script>
 </body>
 
 </html>

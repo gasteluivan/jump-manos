@@ -1,17 +1,9 @@
 /* =============================================
-   HAND GESTURE RUNNER - CYBERPUNK STYLES
-   Version: 1.0.0
+   CYBER RUNNER - Performance Optimized CSS
+   Version: 2.0.0 - No effects, maximum speed
    ============================================= */
 
-:root {
-    --neon-cyan: #00ffff;
-    --neon-magenta: #ff00ff;
-    --neon-yellow: #ffff00;
-    --dark-bg: #0a0a0f;
-    --dark-secondary: #1a1a2e;
-    --glow-cyan: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 40px #00ffff;
-    --glow-magenta: 0 0 10px #ff00ff, 0 0 20px #ff00ff, 0 0 40px #ff00ff;
-}
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
 
 * {
     margin: 0;
@@ -20,25 +12,22 @@
 }
 
 body {
-    background: var(--dark-bg);
+    background: #0a0a0f;
     overflow: hidden;
-    font-family: 'Orbitron', 'Segoe UI', sans-serif;
-    color: var(--neon-cyan);
+    font-family: 'Orbitron', Arial, sans-serif;
+    color: #00ffff;
 }
 
 #gameContainer {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
 }
 
 #gameCanvas {
-    position: absolute;
-    top: 0;
-    left: 0;
+    display: block;
     width: 100%;
     height: 100%;
 }
@@ -52,17 +41,14 @@ body {
 /* Loading Screen */
 #loadingScreen {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--dark-bg);
+    inset: 0;
+    background: #0a0a0f;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     z-index: 1000;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.3s;
 }
 
 #loadingScreen.hidden {
@@ -71,38 +57,31 @@ body {
 }
 
 .loading-text {
-    font-size: 2rem;
+    font-size: 1.5rem;
     text-transform: uppercase;
-    letter-spacing: 0.5rem;
-    animation: pulse 1.5s ease-in-out infinite;
-    text-shadow: var(--glow-cyan);
+    letter-spacing: 0.3rem;
+    color: #00ffff;
 }
 
 .loading-bar {
-    width: 300px;
+    width: 200px;
     height: 4px;
-    background: var(--dark-secondary);
-    margin-top: 2rem;
-    border-radius: 2px;
-    overflow: hidden;
+    background: #1a1a2e;
+    margin-top: 1rem;
 }
 
 .loading-progress {
     height: 100%;
-    background: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta));
+    background: #00ffff;
     width: 0%;
-    transition: width 0.3s ease;
-    box-shadow: var(--glow-cyan);
+    transition: width 0.2s;
 }
 
-/* Permission Request */
+/* Permission */
 #permissionRequest {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(10, 10, 15, 0.95);
+    inset: 0;
+    background: #0a0a0f;
     display: none;
     flex-direction: column;
     justify-content: center;
@@ -117,70 +96,21 @@ body {
 }
 
 .permission-icon {
-    font-size: 4rem;
+    font-size: 3rem;
     margin-bottom: 1rem;
 }
 
 .permission-text {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-    text-shadow: var(--glow-cyan);
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
 }
 
 .permission-subtext {
-    font-size: 1rem;
-    color: rgba(255, 255, 255, 0.6);
-    max-width: 400px;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.5);
 }
 
-/* Animations */
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.5;
-    }
-}
-
-@keyframes scanline {
-    0% {
-        transform: translateY(-100%);
-    }
-
-    100% {
-        transform: translateY(100vh);
-    }
-}
-
-/* Scanline effect overlay */
-#scanlines {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 999;
-    background: repeating-linear-gradient(0deg,
-            rgba(0, 0, 0, 0.1) 0px,
-            rgba(0, 0, 0, 0.1) 1px,
-            transparent 1px,
-            transparent 2px);
-    opacity: 0.3;
-}
-
-/* Google Fonts Import for Orbitron */
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
-
-/* =============================================
-   MOBILE OPTIMIZATIONS
-   ============================================= */
-
-/* Prevent text selection and touch callouts on mobile */
+/* Mobile */
 .mobile-device {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
@@ -192,122 +122,52 @@ body {
     touch-action: none;
 }
 
-/* Mobile touch indicator */
+/* Touch indicator */
 #touchIndicator {
     position: fixed;
-    bottom: 30px;
+    bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    padding: 15px 30px;
-    background: rgba(0, 255, 255, 0.15);
-    border: 2px solid var(--neon-cyan);
-    border-radius: 50px;
-    font-size: 1rem;
-    font-family: 'Orbitron', sans-serif;
-    color: var(--neon-cyan);
-    text-shadow: var(--glow-cyan);
+    padding: 10px 20px;
+    background: rgba(0, 255, 255, 0.1);
+    border: 1px solid #00ffff;
+    border-radius: 30px;
+    font-size: 0.8rem;
+    color: #00ffff;
     z-index: 100;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.3s;
 }
 
 #touchIndicator.visible {
     opacity: 1;
 }
 
-/* Safe area padding for notched devices */
-@supports (padding: env(safe-area-inset-bottom)) {
-    #touchIndicator {
-        bottom: calc(30px + env(safe-area-inset-bottom));
-    }
-
-    #gameContainer {
-        padding-top: env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
-        padding-left: env(safe-area-inset-left);
-        padding-right: env(safe-area-inset-right);
-    }
-}
-
-/* Reduce animations on mobile for performance */
-.mobile-device .loading-text {
-    animation: none;
-    opacity: 1;
-}
-
-/* Hide scanlines on mobile for performance */
-.mobile-device #scanlines {
-    display: none;
-}
-
-/* Optimize loading bar for mobile */
-.mobile-device .loading-bar {
-    width: 200px;
-}
-
-/* Mobile permission screen adjustments */
-.mobile-device .permission-icon {
-    font-size: 3rem;
-}
-
-.mobile-device .permission-text {
-    font-size: 1.2rem;
-}
-
-.mobile-device .permission-subtext {
-    font-size: 0.9rem;
-    padding: 0 20px;
-}
-
-/* Landscape orientation prompt for mobile */
+/* Orientation prompt */
 #orientationPrompt {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: var(--dark-bg);
+    inset: 0;
+    background: #0a0a0f;
     display: none;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     z-index: 2000;
     text-align: center;
-    padding: 2rem;
 }
 
 #orientationPrompt .rotate-icon {
-    font-size: 4rem;
+    font-size: 3rem;
     margin-bottom: 1rem;
-    animation: rotatePhone 2s ease-in-out infinite;
 }
 
 #orientationPrompt .rotate-text {
-    font-size: 1.2rem;
-    color: var(--neon-cyan);
-    text-shadow: var(--glow-cyan);
+    font-size: 1rem;
+    color: #00ffff;
 }
 
-@keyframes rotatePhone {
-
-    0%,
-    100% {
-        transform: rotate(0deg);
-    }
-
-    25% {
-        transform: rotate(-20deg);
-    }
-
-    75% {
-        transform: rotate(20deg);
-    }
-}
-
-/* Show orientation prompt only on mobile portrait */
-@media screen and (max-aspect-ratio: 1/1) {
-    .mobile-device #orientationPrompt {
-        display: flex;
-    }
+/* NO scanlines, NO animations for performance */
+#scanlines {
+    display: none;
 }
