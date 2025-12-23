@@ -1,7 +1,7 @@
 /**
  * =============================================
  * CYBER RUNNER - Performance Optimized
- * Version: 2.1.0
+ * Version: 2.2.0
  * =============================================
  * Flat 2D infinite runner - NO parallax
  * Maximum performance for mobile devices
@@ -27,7 +27,7 @@ let IS_MOBILE = false;
 const CONFIG = {
     INITIAL_SPEED: 6,
     MAX_SPEED: 18,
-    SPEED_INCREMENT: 0.002,
+    SPEED_INCREMENT: 0.005,
     GRAVITY: 1.0,
     JUMP_FORCE: -16,
     PLAYER_SIZE: 40,
@@ -185,7 +185,7 @@ function onHands(r) {
 }
 
 // ============================================
-// GESTURE DETECTION (Simplified)
+// GESTURE DETECTION - FAST RESPONSE
 // ============================================
 function detectThumbsUp() {
     if (!handData) return;
@@ -197,7 +197,8 @@ function detectThumbsUp() {
 
     if (thumbUp && fingersCurled) {
         if (!thumbsStart) thumbsStart = Date.now();
-        thumbsProgress = Math.min((Date.now() - thumbsStart) / 1500, 1);
+        // FASTER: 800ms instead of 1500ms
+        thumbsProgress = Math.min((Date.now() - thumbsStart) / 800, 1);
         if (thumbsProgress >= 1) {
             if (gameState === State.INTRO) startGame();
             else if (gameState === State.GAME_OVER) startGame();
@@ -216,7 +217,8 @@ function detectFlick() {
     const y = handData[8].y * canvas.height;
     if (flickY !== null) {
         const vel = flickY - y;
-        if (vel > 12 && !player.jumping) jump();
+        // FASTER: threshold 6 instead of 12
+        if (vel > 6 && !player.jumping) jump();
     }
     flickY = y;
 }
